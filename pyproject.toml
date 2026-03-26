@@ -9,8 +9,14 @@ authors = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+ui = [
+  "streamlit>=1.43"
+]
+
 [project.scripts]
 wealth = "wealth_cli.app:main"
+wealth-ui = "wealth_cli.streamlit_app:launch"
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -56,6 +56,43 @@ CREATE TABLE IF NOT EXISTS market_prices (
     as_of TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS recurring_investment_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    quote_currency TEXT NOT NULL DEFAULT 'USDT',
+    budget_amount REAL NOT NULL CHECK (budget_amount > 0),
+    schedule_type TEXT NOT NULL CHECK (schedule_type IN ('daily')),
+    run_time TEXT NOT NULL,
+    timezone TEXT NOT NULL DEFAULT 'Asia/Taipei',
+    asset_class TEXT NOT NULL DEFAULT 'crypto',
+    market TEXT NOT NULL DEFAULT 'BINANCE',
+    price_source TEXT NOT NULL DEFAULT 'binance',
+    note TEXT NOT NULL DEFAULT '',
+    is_enabled INTEGER NOT NULL DEFAULT 1 CHECK (is_enabled IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(symbol, quote_currency, schedule_type, run_time, timezone)
+);
+
+CREATE TABLE IF NOT EXISTS recurring_investment_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL,
+    scheduled_for TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'success')),
+    symbol TEXT NOT NULL,
+    quote_currency TEXT NOT NULL DEFAULT 'USDT',
+    budget_amount REAL NOT NULL CHECK (budget_amount > 0),
+    price REAL NOT NULL CHECK (price > 0),
+    quantity REAL NOT NULL CHECK (quantity > 0),
+    source TEXT NOT NULL DEFAULT 'binance',
+    trade_id INTEGER,
+    message TEXT NOT NULL DEFAULT '',
+    executed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(plan_id) REFERENCES recurring_investment_plans(id) ON DELETE CASCADE,
+    FOREIGN KEY(trade_id) REFERENCES investment_trades(id) ON DELETE SET NULL,
+    UNIQUE(plan_id, scheduled_for)
+);
 """
 
 

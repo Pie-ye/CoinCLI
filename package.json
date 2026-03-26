@@ -8,7 +8,8 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "agent": "node src/agent.js"
+    "agent": "node src/agent.js",
+    "dca:run": "node src/run-recurring-investments.js"
   },
   "dependencies": {
     "@github/copilot": "1.0.10",

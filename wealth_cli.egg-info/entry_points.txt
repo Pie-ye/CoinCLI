@@ -1,0 +1,3 @@
+[console_scripts]
+wealth = wealth_cli.app:main
+wealth-ui = wealth_cli.streamlit_app:launch

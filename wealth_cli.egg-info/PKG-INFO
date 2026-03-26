@@ -1,3 +1,13 @@
+Metadata-Version: 2.4
+Name: wealth-cli
+Version: 0.1.0
+Summary: Terminal-first bookkeeping and investment tracking CLI.
+Author: OpenAI Codex
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Provides-Extra: ui
+Requires-Dist: streamlit>=1.43; extra == "ui"
+
 ﻿# Project CLI-Wealth
 
 Project CLI-Wealth 目前有兩種版本：

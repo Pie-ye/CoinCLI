@@ -3,6 +3,11 @@ import { z } from "zod";
 
 import { withDatabase } from "./db.js";
 import { fetchLatestMarketPrice } from "./market-data.js";
+import {
+  listRecurringInvestmentPlans,
+  runDueRecurringInvestmentPlans,
+  upsertRecurringInvestmentPlan,
+} from "./recurring-investments.js";
 
 const PERIOD_VALUES = ["day", "week", "month", "year", "all"];
 
@@ -351,6 +356,9 @@ export const TOOL_NAMES = [
   "refresh_market_prices",
   "list_investment_activity",
   "get_portfolio_summary",
+  "upsert_recurring_investment_plan",
+  "list_recurring_investment_plans",
+  "run_due_recurring_investments",
 ];
 
 export const financeTools = [
@@ -855,5 +863,53 @@ export const financeTools = [
           },
         };
       }),
+  }),
+  defineTool("upsert_recurring_investment_plan", {
+    description: "Create or update one recurring daily BTC investment plan.",
+    parameters: z.object({
+      symbol: z.string().min(1),
+      budgetAmount: z.number().positive(),
+      quoteCurrency: z.string().default("USDT"),
+      scheduleType: z.enum(["daily"]).default("daily"),
+      runTime: z.string(),
+      timeZone: z.string().default("Asia/Taipei"),
+      assetClass: z.string().default("crypto"),
+      market: z.string().default("BINANCE"),
+      priceSource: z.string().default("binance"),
+      note: z.string().default(""),
+      enabled: z.boolean().default(true),
+    }),
+    handler: async (input) => {
+      const result = upsertRecurringInvestmentPlan(input);
+      return {
+        message: commonText.success,
+        dbPath: result.dbPath,
+        plan: result.plan,
+      };
+    },
+  }),
+  defineTool("list_recurring_investment_plans", {
+    description: "List recurring investment plans and the latest execution status.",
+    parameters: z.object({
+      enabled: z.boolean().optional(),
+    }),
+    handler: async (input) => ({
+      message: commonText.success,
+      plans: listRecurringInvestmentPlans(input),
+    }),
+  }),
+  defineTool("run_due_recurring_investments", {
+    description: "Execute recurring investment plans that are already due at the current time.",
+    parameters: z.object({}),
+    handler: async () => {
+      const result = await runDueRecurringInvestmentPlans();
+      return {
+        message: commonText.success,
+        dbPath: result.dbPath,
+        executed: result.executed,
+        skipped: result.skipped,
+        failed: result.failed,
+      };
+    },
   }),
 ];
