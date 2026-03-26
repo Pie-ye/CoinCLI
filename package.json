@@ -1,0 +1,18 @@
+{
+  "name": "wealth-cli-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Natural-language finance agent for Project CLI-Wealth powered by GitHub Copilot SDK.",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "agent": "node src/agent.js"
+  },
+  "dependencies": {
+    "@github/copilot": "1.0.10",
+    "@github/copilot-sdk": "0.2.0",
+    "zod": "^4.3.6"
+  }
+}
