@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wealth CLI Console</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Wealth CLI · Web Console</p>
+          <h1>記帳與投資操作台</h1>
+          <p class="hero-copy">
+            透過同一組 REST API 管理收支、投資交易、投組摘要，並即時查看 BTC 市場價格。
+          </p>
+        </div>
+        <div class="hero-actions">
+          <button id="init-db-button" class="secondary">初始化資料庫</button>
+          <button id="refresh-all-button">重新整理全部資料</button>
+        </div>
+      </header>
+
+      <section class="summary-grid">
+        <article class="summary-card accent-blue">
+          <span class="summary-label">本月收入</span>
+          <strong id="summary-income">—</strong>
+        </article>
+        <article class="summary-card accent-red">
+          <span class="summary-label">本月支出</span>
+          <strong id="summary-expense">—</strong>
+        </article>
+        <article class="summary-card accent-green">
+          <span class="summary-label">本月淨額</span>
+          <strong id="summary-net">—</strong>
+        </article>
+        <article class="summary-card accent-gold btc-card">
+          <div class="btc-header">
+            <span class="summary-label">BTC 即時價格</span>
+            <button id="refresh-btc-button" class="ghost small">刷新</button>
+          </div>
+          <strong id="summary-btc-price">—</strong>
+          <span id="summary-btc-change" class="muted">等待資料</span>
+        </article>
+      </section>
+
+      <section id="feedback-banner" class="feedback-banner hidden"></section>
+
+      <nav class="tabbar" aria-label="主要功能">
+        <button class="tab active" data-tab="ledger">記帳</button>
+        <button class="tab" data-tab="investments">投資</button>
+      </nav>
+
+      <main class="tab-panels">
+        <section class="tab-panel active" data-panel="ledger">
+          <div class="panel-grid two-columns">
+            <article class="card">
+              <div class="card-header">
+                <div>
+                  <h2>新增收支</h2>
+                  <p>新增收入或支出資料，之後可直接在下方刪除或檢視。</p>
+                </div>
+              </div>
+              <form id="ledger-form" class="form-grid">
+                <label>
+                  類型
+                  <select name="entryType" required>
+                    <option value="expense">支出</option>
+                    <option value="income">收入</option>
+                  </select>
+                </label>
+                <label>
+                  金額
+                  <input type="number" name="amount" min="0" step="0.01" required />
+                </label>
+                <label class="span-2">
+                  說明
+                  <input type="text" name="description" placeholder="例如：午餐、薪資、交通" required />
+                </label>
+                <label>
+                  分類
+                  <select name="category" required>
+                    <option value="餐飲">餐飲</option>
+                    <option value="工作">工作</option>
+                    <option value="投資">投資</option>
+                    <option value="娛樂">娛樂</option>
+                    <option value="日用" selected>日用</option>
+                    <option value="交通">交通</option>
+                  </select>
+                </label>
+                <label>
+                  日期
+                  <input type="date" name="entryDate" />
+                </label>
+                <label class="span-2">
+                  標籤
+                  <input type="text" name="tags" placeholder="可用逗號分隔，例如：daily,office" />
+                </label>
+                <div class="form-actions span-2">
+                  <button type="submit">新增收支</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="card">
+              <div class="card-header">
+                <div>
+                  <h2>定期收支計畫</h2>
+                  <p>建立每日或每月固定收入 / 支出規則，API 啟動後會自動輪詢入帳。</p>
+                </div>
+                <button id="run-recurring-ledger-button" class="ghost">立即執行</button>
+              </div>
+              <form id="recurring-ledger-form" class="form-grid">
+                <label>
+                  類型
+                  <select name="entryType" required>
+                    <option value="expense">支出</option>
+                    <option value="income">收入</option>
+                  </select>
+                </label>
+                <label>
+                  金額
+                  <input type="number" name="amount" min="0" step="0.01" required />
+                </label>
+                <label class="span-2">
+                  說明
+                  <input type="text" name="description" placeholder="例如：房租、薪資、通勤月票" required />
+                </label>
+                <label>
+                  分類
+                  <select name="category" required>
+                    <option value="餐飲">餐飲</option>
+                    <option value="工作">工作</option>
+                    <option value="投資">投資</option>
+                    <option value="娛樂">娛樂</option>
+                    <option value="日用" selected>日用</option>
+                    <option value="交通">交通</option>
+                  </select>
+                </label>
+                <label>
+                  週期
+                  <select name="scheduleType" id="recurring-schedule-type" required>
+                    <option value="daily">每日</option>
+                    <option value="monthly">每月</option>
+                  </select>
+                </label>
+                <label>
+                  執行時間
+                  <input type="time" name="runTime" required />
+                </label>
+                <label id="recurring-day-of-month-field" class="hidden">
+                  每月日期
+                  <input type="number" name="dayOfMonth" min="1" max="31" value="1" />
+                </label>
+                <label>
+                  開始日期
+                  <input type="date" name="startDate" />
+                </label>
+                <label class="span-2">
+                  備註
+                  <input type="text" name="note" placeholder="選填" />
+                </label>
+                <div class="form-actions span-2">
+                  <button type="submit">新增定期計畫</button>
+                </div>
+              </form>
+              <div class="table-wrapper compact top-gap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>類型</th>
+                      <th>說明</th>
+                      <th>分類</th>
+                      <th>金額</th>
+                      <th>週期</th>
+                      <th>下次執行</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recurring-ledger-table-body">
+                    <tr><td colspan="8" class="empty">尚無定期收支計畫</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-header">
+                <div>
+                  <h2>本月分類摘要</h2>
+                  <p>依照既有報表 API 顯示各分類收入、支出與淨額。</p>
+                </div>
+              </div>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>分類</th>
+                      <th>收入</th>
+                      <th>支出</th>
+                      <th>淨額</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ledger-report-body">
+                    <tr><td colspan="4" class="empty">尚無資料</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+
+          <article class="card">
+            <div class="card-header split">
+              <div>
+                <h2>收支列表</h2>
+                <p>可用分類與日期區間查詢，並直接刪除單筆收支紀錄。</p>
+              </div>
+              <button id="refresh-ledger-button" class="ghost">更新列表</button>
+            </div>
+            <form id="ledger-filter-form" class="inline-filter-form">
+              <label>
+                分類
+                <select name="category">
+                  <option value="">全部分類</option>
+                  <option value="餐飲">餐飲</option>
+                  <option value="工作">工作</option>
+                  <option value="投資">投資</option>
+                  <option value="娛樂">娛樂</option>
+                  <option value="日用">日用</option>
+                  <option value="交通">交通</option>
+                </select>
+              </label>
+              <label>
+                開始日期
+                <input type="date" name="startDate" />
+              </label>
+              <label>
+                結束日期
+                <input type="date" name="endDate" />
+              </label>
+              <div class="filter-actions">
+                <button type="submit">查詢</button>
+                <button type="button" id="clear-ledger-filters" class="secondary">清除</button>
+              </div>
+            </form>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>日期</th>
+                    <th>類型</th>
+                    <th>分類</th>
+                    <th>金額</th>
+                    <th>說明</th>
+                    <th>標籤</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="ledger-table-body">
+                  <tr><td colspan="8" class="empty">尚無資料</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="tab-panel" data-panel="investments">
+          <div class="panel-grid two-columns">
+            <article class="card">
+              <div class="card-header split">
+                <div>
+                  <h2>投資交易</h2>
+                  <p>記錄買入、賣出，並在投資界面同步顯示 BTC 當前價格。</p>
+                </div>
+                <div class="inline-price-chip">
+                  <span>BTC</span>
+                  <strong id="investment-btc-price">—</strong>
+                </div>
+              </div>
+              <form id="trade-form" class="form-grid">
+                <label>
+                  方向
+                  <select name="tradeType" required>
+                    <option value="buy">買入</option>
+                    <option value="sell">賣出</option>
+                  </select>
+                </label>
+                <label>
+                  標的
+                  <input type="text" name="symbol" placeholder="BTC" required />
+                </label>
+                <label>
+                  數量
+                  <input type="number" name="quantity" min="0" step="0.000001" required />
+                </label>
+                <label>
+                  單價
+                  <input type="number" name="unitPrice" min="0" step="0.000001" required />
+                </label>
+                <label>
+                  手續費
+                  <input type="number" name="fee" min="0" step="0.01" value="0" />
+                </label>
+                <label>
+                  日期
+                  <input type="date" name="tradeDate" />
+                </label>
+                <label>
+                  資產類別
+                  <input type="text" name="assetClass" placeholder="crypto / stock" />
+                </label>
+                <label>
+                  市場
+                  <input type="text" name="market" placeholder="BINANCE" />
+                </label>
+                <label class="span-2">
+                  備註
+                  <input type="text" name="note" placeholder="選填" />
+                </label>
+                <div class="form-actions span-2">
+                  <button type="submit">送出交易</button>
+                </div>
+              </form>
+            </article>
+
+          </div>
+
+          <article class="card">
+            <div class="card-header split">
+              <div>
+                <h2>投組摘要</h2>
+                <p>顯示持倉、市值、報酬與 ROI。</p>
+              </div>
+              <button id="refresh-portfolio-button" class="ghost">更新投組</button>
+            </div>
+            <div class="portfolio-metrics">
+              <div><span>投入</span><strong id="portfolio-capital-in">—</strong></div>
+              <div><span>持倉成本</span><strong id="portfolio-open-cost">—</strong></div>
+              <div><span>市值</span><strong id="portfolio-market-value">—</strong></div>
+              <div><span>總報酬</span><strong id="portfolio-total-return">—</strong></div>
+            </div>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>標的</th>
+                    <th>數量</th>
+                    <th>成本</th>
+                    <th>現價</th>
+                    <th>市值</th>
+                    <th>未實現</th>
+                    <th>已實現</th>
+                    <th>ROI</th>
+                  </tr>
+                </thead>
+                <tbody id="portfolio-table-body">
+                  <tr><td colspan="8" class="empty">尚無投資資料</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-header split">
+              <div>
+                <h2>投資活動</h2>
+                <p>列出投資交易記錄。</p>
+              </div>
+              <button id="refresh-activity-button" class="ghost">更新活動</button>
+            </div>
+            <div class="activity-grid">
+              <div>
+                <h3>交易</h3>
+                <div class="table-wrapper compact">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>日期</th>
+                        <th>類型</th>
+                        <th>標的</th>
+                        <th>數量</th>
+                        <th>單價</th>
+                      </tr>
+                    </thead>
+                    <tbody id="trades-table-body">
+                      <tr><td colspan="6" class="empty">尚無交易資料</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

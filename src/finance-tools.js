@@ -160,27 +160,6 @@ function computePositions(db, symbolFilter = null) {
         )
         .all();
 
-  const dividendRows = symbolFilter
-    ? db
-        .prepare(
-          `
-          SELECT symbol, dividend_type, amount, quantity, payout_date
-          FROM investment_dividends
-          WHERE symbol = ?
-          ORDER BY payout_date ASC, id ASC
-          `,
-        )
-        .all(String(symbolFilter).toUpperCase())
-    : db
-        .prepare(
-          `
-          SELECT symbol, dividend_type, amount, quantity, payout_date
-          FROM investment_dividends
-          ORDER BY payout_date ASC, id ASC
-          `,
-        )
-        .all();
-
   const priceRows = db.prepare("SELECT symbol, price, currency, as_of FROM market_prices").all();
   const state = new Map();
 
@@ -194,7 +173,6 @@ function computePositions(db, symbolFilter = null) {
         remainingCost: 0,
         capitalIn: 0,
         realizedPnl: 0,
-        dividends: 0,
       });
     }
     return state.get(symbol);
@@ -225,15 +203,6 @@ function computePositions(db, symbolFilter = null) {
     position.remainingCost -= costBasis;
   }
 
-  for (const row of dividendRows) {
-    const position = ensureState(row.symbol);
-    if (row.dividend_type === "cash") {
-      position.dividends += Number(row.amount);
-    } else {
-      position.quantity += Number(row.quantity);
-    }
-  }
-
   const prices = new Map(priceRows.map((row) => [row.symbol, row]));
 
   return [...state.values()]
@@ -242,7 +211,7 @@ function computePositions(db, symbolFilter = null) {
       const price = priceInfo ? Number(priceInfo.price) : null;
       const marketValue = position.quantity === 0 ? 0 : price === null ? null : position.quantity * price;
       const unrealizedPnl = marketValue === null ? null : marketValue - position.remainingCost;
-      const totalReturn = unrealizedPnl === null ? null : unrealizedPnl + position.realizedPnl + position.dividends;
+      const totalReturn = unrealizedPnl === null ? null : unrealizedPnl + position.realizedPnl;
       const roiPct = totalReturn === null || position.capitalIn <= 0 ? null : (totalReturn / position.capitalIn) * 100;
 
       return {
@@ -253,7 +222,6 @@ function computePositions(db, symbolFilter = null) {
         remainingCost: round(position.remainingCost),
         capitalIn: round(position.capitalIn),
         realizedPnl: round(position.realizedPnl),
-        dividends: round(position.dividends),
         price: price === null ? null : round(price, 6),
         currency: priceInfo?.currency ?? "",
         priceDate: priceInfo?.as_of ?? null,
@@ -318,8 +286,6 @@ function loadTrackedSymbols(db, { symbol = null, scope = "open_positions" } = {}
           ) AS market
         FROM (
           SELECT DISTINCT symbol FROM investment_trades
-          UNION
-          SELECT DISTINCT symbol FROM investment_dividends
         ) AS symbols
         ORDER BY symbol ASC
         `,
@@ -351,7 +317,6 @@ export const TOOL_NAMES = [
   "delete_ledger_entry",
   "get_ledger_report",
   "record_investment_trade",
-  "record_dividend",
   "set_market_price",
   "refresh_market_prices",
   "list_investment_activity",
@@ -574,47 +539,6 @@ export const financeTools = [
         };
       }),
   }),
-  defineTool("record_dividend", {
-    description: "Record one cash or stock dividend.",
-    parameters: z.object({
-      symbol: z.string().min(1),
-      dividendType: z.enum(["cash", "stock"]).default("cash"),
-      amount: z.number().nonnegative().default(0),
-      quantity: z.number().nonnegative().default(0),
-      payoutDate: z.string().optional(),
-      note: z.string().default(""),
-    }),
-    handler: async (input) =>
-      withDatabase((db) => {
-        if (input.dividendType === "stock" && input.quantity <= 0) {
-          throw new Error("Stock dividend requires quantity greater than 0.");
-        }
-
-        const payoutDate = ensureIsoDate(input.payoutDate);
-        const symbol = input.symbol.toUpperCase();
-        const result = db
-          .prepare(
-            `
-            INSERT INTO investment_dividends (symbol, dividend_type, amount, quantity, payout_date, note)
-            VALUES (?, ?, ?, ?, ?, ?)
-            `,
-          )
-          .run(symbol, input.dividendType, input.amount, input.quantity, payoutDate, input.note);
-
-        return {
-          message: commonText.success,
-          dividend: {
-            id: Number(result.lastInsertRowid),
-            symbol,
-            dividendType: input.dividendType,
-            amount: round(input.amount),
-            quantity: round(input.quantity, 6),
-            payoutDate,
-            note: input.note,
-          },
-        };
-      }),
-  }),
   defineTool("set_market_price", {
     description: "Update the latest stored price for one asset.",
     parameters: z.object({
@@ -739,7 +663,7 @@ export const financeTools = [
     },
   }),
   defineTool("list_investment_activity", {
-    description: "List trades and dividend history.",
+    description: "List investment trade history.",
     parameters: z.object({
       symbol: z.string().optional(),
       limit: z.number().int().positive().max(100).default(20),
@@ -772,29 +696,6 @@ export const financeTools = [
               )
               .all(limit);
 
-        const dividends = symbol
-          ? db
-              .prepare(
-                `
-                SELECT id, payout_date, dividend_type, symbol, amount, quantity, note
-                FROM investment_dividends
-                WHERE symbol = ?
-                ORDER BY payout_date DESC, id DESC
-                LIMIT ?
-                `,
-              )
-              .all(symbol, limit)
-          : db
-              .prepare(
-                `
-                SELECT id, payout_date, dividend_type, symbol, amount, quantity, note
-                FROM investment_dividends
-                ORDER BY payout_date DESC, id DESC
-                LIMIT ?
-                `,
-              )
-              .all(limit);
-
         return {
           message: commonText.success,
           trades: trades.map((row) => ({
@@ -807,15 +708,6 @@ export const financeTools = [
             quantity: round(row.quantity, 6),
             unitPrice: round(row.unit_price),
             fee: round(row.fee),
-            note: row.note,
-          })),
-          dividends: dividends.map((row) => ({
-            id: row.id,
-            payoutDate: row.payout_date,
-            dividendType: row.dividend_type,
-            symbol: row.symbol,
-            amount: round(row.amount),
-            quantity: round(row.quantity, 6),
             note: row.note,
           })),
         };
@@ -833,18 +725,17 @@ export const financeTools = [
             accumulator.capitalIn += item.capitalIn;
             accumulator.openCost += item.remainingCost;
             accumulator.realized += item.realizedPnl;
-            accumulator.dividends += item.dividends;
             if (item.marketValue !== null) {
               accumulator.marketValue += item.marketValue;
             }
             return accumulator;
           },
-          { capitalIn: 0, openCost: 0, realized: 0, dividends: 0, marketValue: 0 },
+          { capitalIn: 0, openCost: 0, realized: 0, marketValue: 0 },
         );
 
         const complete = missingPrices.length === 0;
         const unrealized = complete ? totals.marketValue - totals.openCost : null;
-        const totalReturn = complete ? unrealized + totals.realized + totals.dividends : null;
+        const totalReturn = complete ? unrealized + totals.realized : null;
         const roiPct = complete && totals.capitalIn > 0 ? (totalReturn / totals.capitalIn) * 100 : null;
 
         return {
@@ -854,7 +745,6 @@ export const financeTools = [
             capitalIn: round(totals.capitalIn),
             openCost: round(totals.openCost),
             realized: round(totals.realized),
-            dividends: round(totals.dividends),
             marketValue: complete ? round(totals.marketValue) : null,
             unrealized: unrealized === null ? null : round(unrealized),
             totalReturn: totalReturn === null ? null : round(totalReturn),

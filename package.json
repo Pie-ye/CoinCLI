@@ -1,19 +1,27 @@
 {
-  "name": "wealth-cli-agent",
+  "name": "wealth-cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Natural-language finance agent for Project CLI-Wealth powered by GitHub Copilot SDK.",
+  "description": "Node.js wealth CLI for bookkeeping, investment tracking, and Binance BTC market data.",
+  "bin": {
+    "wealth": "./src/cli.js"
+  },
   "engines": {
     "node": ">=20.0.0"
   },
   "scripts": {
+    "cli": "node src/cli.js",
+    "api": "node src/api-server.js",
     "agent": "node src/agent.js",
-    "dca:run": "node src/run-recurring-investments.js"
+    "dca:run": "node src/run-recurring-investments.js",
+    "ledger:run": "node src/run-recurring-ledger.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@github/copilot": "1.0.10",
     "@github/copilot-sdk": "0.2.0",
+    "express": "^5.2.1",
     "zod": "^4.3.6"
   }
 }

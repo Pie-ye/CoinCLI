@@ -1,242 +1,194 @@
-﻿# Project CLI-Wealth
+# Wealth CLI
 
-Project CLI-Wealth 目前有兩種版本：
+Node.js 版的個人財務工具，提供三個入口：
 
-- Agent 版：以自然語言 agent 為主入口，透過 GitHub Copilot SDK 操作資料庫
-- Streamlit 版：提供中央輸入框與側欄清單檢視，直接操作同一份 SQLite
+- CLI：記帳、投資紀錄、價格更新、BTC 定投
+- REST API：給其他記帳軟體或分析流程直接串接
+- Web Console：瀏覽器前端，可直接新增 / 刪除 / 顯示收支與投資資料
+- Agent：透過 GitHub Copilot SDK 以自然語言操作同一份 SQLite
 
-Agent 版可直接用中文描述需求，例如：
+本專案已移除 Python 依賴，所有主要功能都以 Node.js 為核心。
 
-- 幫我記一筆午餐 150 元
-- 顯示本月收支報表
-- 幫我記錄買入 AAPL 10 股，每股 180 美元，手續費 1.5
-- 更新 AAPL 最新價格為 195 美元
-- 從 Binance 更新 BTC 最新價格
-- 幫我看目前投資報酬率
-- 幫我設定每天中午 12 點定投 100 USDT 的 BTC
+## 功能
 
-Agent 會把自然語言轉成內部財務工具呼叫，寫入或查詢同一份 SQLite 資料庫。
-
-## 功能範圍
-
-目前 agent 只處理財務相關任務：
-
-- 收入與支出新增
-- 收支清單查詢
-- 收支報表摘要
-- 收支刪除
-- 投資買入與賣出
-- 現金股利與股票股利
-- 最新價格更新
-- 投資交易查詢
-- 投資部位與 ROI 摘要
-- BTC 定期定額計畫設定
-- 到期定投執行與落庫
-- Streamlit 介面瀏覽收入、支出、投資、價格、定投資料
-
-Agent 不開放 shell、檔案、git、網路等其他內建能力，只允許專案內註冊的財務工具。
+- 收入 / 支出新增、查詢、報表、刪除
+- 投資交易、投組損益摘要
+- 多來源 BTC 即時價格（Binance / Coinbase / CoinGecko fallback）
+- Binance BTC 至少 5 年歷史 K 線同步
+- BTC 均線、成交量、區間高低、年化區間報酬分析
+- BTC 定期定額計畫與排程執行
+- REST API 供外部系統整合
 
 ## 環境需求
 
-依 GitHub Copilot SDK 官方文件，執行前至少需要：
-
-- Node.js 20 以上
-- GitHub Copilot CLI，且已完成登入驗證
-- 可安裝 npm 套件的環境
+- Node.js 20+
+- npm
+- 若要使用 Agent：需完成 GitHub Copilot CLI 登入
 
 ## 安裝
-
-先安裝專案依賴：
 
 ```powershell
 npm install
 ```
 
-安裝完成後，先登入 GitHub Copilot CLI：
+## CLI
+
+查看說明：
+
+```powershell
+npm run cli -- help
+```
+
+常用指令：
+
+```powershell
+npm run cli -- init
+npm run cli -- ledger add expense 150 午餐 --category 餐飲
+npm run cli -- ledger report --period month
+npm run cli -- invest buy BTC 0.01 70000 --asset-class crypto --market BINANCE
+npm run cli -- market btc
+npm run cli -- market btc --save
+```
+
+若要提供其他工具串接，建議使用 `--json`：
+
+```powershell
+npm run cli -- ledger list --period month --json
+npm run cli -- market btc --json
+```
+
+## REST API
+
+啟動 API：
+
+```powershell
+npm run api
+```
+
+預設會在 `http://127.0.0.1:8787` 啟動。
+
+## Web Console
+
+啟動 API 後，直接開啟首頁即可使用前端介面：
+
+- `http://127.0.0.1:8787/`
+
+介面內容包含：
+
+- 記帳頁：新增、刪除、顯示收支紀錄與本月分類摘要
+- 記帳頁分類固定為：餐飲、工作、投資、娛樂、日用、交通
+- 記帳頁可建立每日 / 每月的定期收支計畫，並支援分類 / 日期區間查詢
+- 投資頁：新增買賣交易、查看投組摘要與投資活動
+- BTC 即時價格卡：在總覽與投資頁面同步顯示當前 BTC 價格
+
+若 Binance 暫時無法連線，系統會自動改用 Coinbase 或 CoinGecko；前端也會保留其他資料畫面，而不會整頁失效。
+
+### 定期收支自動執行
+
+- API 啟動後，內建排程器會每分鐘檢查一次定期收支計畫
+- 也可以手動執行：`npm run ledger:run`
+- 可用環境變數調整：
+	- `WEALTH_LEDGER_SCHEDULER_ENABLED=true|false`
+	- `WEALTH_LEDGER_SCHEDULER_INTERVAL_MS=60000`
+
+### 主要端點
+
+- `GET /health`
+- `POST /api/init`
+- `GET /api/ledger/entries`
+- `POST /api/ledger/entries`
+- `DELETE /api/ledger/entries/:entryId`
+- `GET /api/ledger/report`
+- `GET /api/ledger/recurring-plans`
+- `POST /api/ledger/recurring-plans`
+- `DELETE /api/ledger/recurring-plans/:planId`
+- `POST /api/ledger/recurring-plans/run`
+- `POST /api/investments/trades`
+- `GET /api/investments/activity`
+- `GET /api/investments/portfolio`
+- `PUT /api/market/prices/:symbol`
+- `POST /api/market/prices/refresh`
+- `GET /api/market/btc/realtime?save=true`
+- `POST /api/market/btc/history/sync?years=5`
+- `GET /api/market/btc/history?years=5`
+- `GET /api/market/btc/analysis?years=5`
+- `GET /api/market/sync-runs`
+- `GET /api/recurring/plans`
+- `POST /api/recurring/plans`
+- `POST /api/recurring/run`
+
+### 範例
+
+新增支出：
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/ledger/entries -ContentType "application/json" -Body '{"entryType":"expense","amount":120,"description":"午餐","category":"餐飲"}'
+```
+
+同步五年 BTC 歷史資料：
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8787/api/market/btc/history/sync?years=5"
+```
+
+取得 BTC 五年分析：
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8787/api/market/btc/analysis?years=5"
+```
+
+## BTC 市場分析
+
+`/api/market/btc/analysis` 目前會提供：
+
+- 20 / 50 / 200 / 365 日均線
+- 7 / 30 / 90 / 365 日價格變化
+- 20 / 50 日平均成交量與量比
+- 30 / 365 日高低區間
+- 最近 5 年年度報酬摘要
+
+歷史資料預設來自 Binance `BTCUSDT` 日 K。
+
+## Agent
+
+若仍需自然語言互動：
 
 ```powershell
 npx copilot auth login
+npm run agent -- "幫我記一筆午餐 150 元"
 ```
 
-如果你要使用 Streamlit 版本，額外安裝 UI 依賴：
+## 測試
 
 ```powershell
-pip install -e .[ui]
+npm test
 ```
 
-## 使用方式
+## 環境變數
 
-### Streamlit 版本
-
-安裝 `ui` 依賴後，可直接啟動介面版：
-
-```powershell
-wealth-ui
-```
-
-或使用：
-
-```powershell
-streamlit run wealth_cli/streamlit_app.py
-```
-
-Streamlit 版介面包含：
-
-- 中央快捷輸入框，可直接新增收入、支出、投資交易、價格與 BTC 定投
-- 側欄切換收入、支出、投資交易、投資部位、價格、定投計畫、定投執行紀錄
-- 與 CLI / Agent 共用同一份 SQLite 資料庫
-
-聊天框目前支援的快捷格式例如：
-
-```text
-支出 150 午餐 分類 餐飲
-收入 50000 薪水 分類 工作
-買入 BTC 0.01 70000 手續費 0
-價格 BTC 70059.39 USDT 來源 binance
-定投 BTC 100 USDT 12:00
-```
-
-也支援 slash 指令：
-
-```text
-/expense 150 午餐 | 餐飲 | 2026-03-26
-/income 50000 薪水 | 工作
-/buy BTC 0.01 70000 | 0 | crypto | BINANCE | 備註 | 2026-03-26
-/price BTC 70059.39 | USDT | binance | 2026-03-26
-/dca BTC 100 12:00 | Asia/Taipei | 每日定投
-```
-
-### 單次指令
-
-```powershell
-npm run agent -- "幫我記一筆午餐 150 元，分類餐飲"
-```
-
-```powershell
-npm run agent -- "顯示本月收支報表"
-```
-
-```powershell
-npm run agent -- "幫我買入 AAPL 10 股，每股 180 美元，手續費 1.5"
-```
-
-```powershell
-npm run agent -- "從 Binance 更新 BTC 最新價格"
-```
-
-```powershell
-npm run agent -- "幫我設定每天 12:00 定投 100 USDT 的 BTC"
-```
-
-### 互動模式
-
-```powershell
-npm run agent
-```
-
-進入後可直接持續輸入自然語言：
-
-```text
-wealth> 幫我記一筆晚餐 220 元
-wealth> 顯示本月支出
-wealth> 幫我更新 AAPL 最新價格 195
-wealth> 從 Binance 更新 BTC 最新價格
-wealth> 查看投資報酬率
-wealth> 幫我設定每天 12:00 定投 100 USDT 的 BTC
-wealth> exit
-```
-
-## 定期定額
-
-目前定投排程支援：
-
-- 標的：`BTC`
-- 預算幣別：`USDT`
-- 排程：`daily`
-- 價格來源：Binance `BTCUSDT`
-
-你可以直接用 agent 建立或更新排程：
-
-```powershell
-npm run agent -- "幫我設定每日中午 12 點定投 100 USDT 的 BTC"
-```
-
-建立後，設定會寫入 `recurring_investment_plans`。真正的每日執行需要外部排程器呼叫：
-
-```powershell
-npm run dca:run
-```
-
-`npm run dca:run` 會：
-
-- 找出目前已到時間且啟用中的定投計畫
-- 從 Binance 取得 BTC/USDT 最新價格
-- 依 `budget_amount / price` 換算買入數量
-- 寫入 `investment_trades`
-- 寫入 `recurring_investment_runs`
-- 同步更新 `market_prices`
-
-同一個計畫在同一個排程時點只會執行一次，避免重複落單。
-
-### Windows 工作排程器
-
-若要在 Windows 每天 12:00 自動執行，可建立每日工作並設定：
-
-程式或指令碼：
-`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`
-
-引數：
-
-```powershell
--Command "cd 'E:\Workspace\Wealth-Cli'; npm run dca:run"
-```
-
-開始於：
-`E:\Workspace\Wealth-Cli`
-
-## 可用環境變數
-
-- `WEALTH_CLI_DB`
-  自訂 SQLite 資料庫路徑
-- `COPILOT_MODEL`
-  指定 Copilot SDK 使用的模型，預設為 `gpt-5`
-- `COPILOT_CLI_PATH`
-  自訂 `copilot` CLI 執行檔路徑
-
-範例：
-
-```powershell
-$env:WEALTH_CLI_DB = "E:\\data\\wealth.db"
-$env:COPILOT_MODEL = "gpt-5"
-npm run agent
-```
-
-## 資料庫位置
-
-預設資料庫位置：
-
-- `%USERPROFILE%\\.wealth_cli\\wealth.db`
+- `WEALTH_CLI_DB`：自訂 SQLite 路徑
+- `WEALTH_API_PORT`：REST API Port
+- `COPILOT_MODEL`：Agent 模型名稱
+- `COPILOT_CLI_PATH`：自訂 Copilot CLI 路徑
 
 ## 專案結構
 
-- `src/agent.js`
-  Copilot SDK agent 入口
-- `src/finance-tools.js`
-  財務工具定義與資料庫操作
-- `src/db.js`
-  SQLite schema 與連線初始化
-- `src/recurring-investments.js`
-  定投計畫與到期執行邏輯
-- `src/run-recurring-investments.js`
-  可交給排程器呼叫的定投 runner
-- `wealth_cli/streamlit_app.py`
-  Streamlit 版本 UI，提供中央輸入框與側欄列表
+- `src/cli.js`：CLI 入口
+- `src/api-server.js`：REST API 入口
+- `public/index.html`：Web Console 頁面
+- `public/app.js`：前端互動邏輯
+- `public/styles.css`：前端樣式
+- `src/wealth-service.js`：記帳與投資服務層
+- `src/market-data.js`：多來源 BTC 即時資料與 Binance K 線抓取
+- `src/market-history-service.js`：五年 BTC 歷史同步與技術指標分析
+- `src/db.js`：SQLite schema 與連線
+- `src/recurring-investments.js`：定投排程與執行
+- `src/run-recurring-ledger.js`：定期收支手動 runner
+- `src/recurring-ledger-scheduler.js`：定期收支背景排程器
+- `src/agent.js`：Copilot Agent 入口
 
 ## 注意事項
 
-- GitHub Copilot SDK 會透過 Copilot CLI 運作。
-- 第一次執行前，請先完成 `npx copilot auth login`。
-- 目前自動抓價僅支援 `BTC`，會使用 Binance Spot API 的 `BTCUSDT` 報價寫回 `market_prices`。
-- 其他標的目前仍需使用手動價格更新。
-- 定投 runner 需要外部排程器觸發；專案本身不是常駐服務。
-- Streamlit 版目前的中央輸入框是快捷指令模式，不是完整 LLM agent。
+- 歷史資料同步內建重試、退避與基本節流。
+- 同步歷史資料時會建立任務鎖，避免重複同步衝突。
+- 歷史行情與同步紀錄都會寫入 SQLite，方便後續金融分析流程重用。
